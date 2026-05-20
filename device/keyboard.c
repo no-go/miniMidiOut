@@ -103,13 +103,19 @@ static int check_poll (Device *dev, struct epoll_event *all, unsigned int id)
                 g_fading = FADING1;
             } else if ((ev.code == KEY_KP8 || ev.code == KEY_8) && ev.value == 1) {
                 g_fading = FADING2;
-            } else if ((ev.code == KEY_KP9 || ev.code == KEY_9) && ev.value == 1) {
+            
+            } else if ((ev.code == KEY_KPDOT || ev.code == KEY_DOT) && ev.value == 1) {
                 g_autoFading = (g_autoFading+1)%4;
 
-            } else if ((ev.code == KEY_KPMINUS || ev.code == KEY_MINUS) && ev.value == 1) {
+            } else if ((ev.code == KEY_KPMINUS) && ev.value == 1) {
                 voice_pitch /= 2.0f;
-            } else if ((ev.code == KEY_KPDOT || ev.code == KEY_DOT) && ev.value == 1) {
+            } else if ((ev.code == KEY_KPPLUS) && ev.value == 1) {
                 voice_pitch *= 2.0f;
+
+            } else if ((ev.code == KEY_KPSLASH) && ev.value == 1) {
+                if (g_modFactor >= 0.01f) g_modFactor -= 0.01f;
+            } else if ((ev.code == KEY_KPASTERISK) && ev.value == 1) {
+                if (g_modFactor < 0.50f) g_modFactor += 0.01f;
 
             } else if ((ev.code == KEY_KP0 || ev.code == KEY_0) && ev.value == 1 && g_sustain == 0) {
                 g_sustain = 1;

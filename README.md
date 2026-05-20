@@ -43,7 +43,7 @@ With these files/images the system boots a minimal Linux and autostarts `miniMid
 8. **enjoy classic synthesizer sounds from the 80th !**
 9. power off the Pi1 (or eeepc)
 
-## Features (alphanumeric keyboard)
+## Features (alphanumeric keyboard: numpad!)
 
 - press `1` for sinus
 - press `2` for saw
@@ -57,7 +57,7 @@ Change fading out the tone (release):
 - press `6` for default
 - press `7` for a long fade out
 - press `8` for no fade out
-- press `9` toggles
+- press `.` toggles
   - automatic fade out on
   - automatic fade out off
   - if release the key, the freqency goes up
@@ -66,7 +66,12 @@ Change fading out the tone (release):
 Change octave:
 
 - press `-` to set down
-- press `.` to set up
+- press `+` to set up
+
+Change modulation:
+
+- press `/` to set down (or off)
+- press `*` to set up
 
 ## Feature (MIDI keyboard)
 

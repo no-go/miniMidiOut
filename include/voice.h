@@ -16,6 +16,10 @@ typedef struct Voice_s {
   double phase;
   unsigned int envelope;
   int active;
+
+  double mod;
+  int modulationUp;
+
   Noise noise_detail;
 } Voice;
 
