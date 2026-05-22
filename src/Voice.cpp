@@ -4,10 +4,29 @@
 
 double Voice::Increment ()
 {
-    return twoPi * _frequency / SAMPLE_RATE;
+    if (_modFrequency == 0 || _modFactor < 0.0001) {
+        return TWO_PI * _frequency / SAMPLE_RATE;
+    }
+    
+    double val = TWO_PI * (_frequency * (1.0 + _mod)) / SAMPLE_RATE;
+
+    if (_modulationUp)
+    {
+        _mod += 0.5 * _modFrequency / SAMPLE_RATE;
+    }
+    else
+    {
+        _mod -= 0.5 * _modFrequency / SAMPLE_RATE;
+    }
+
+
+    if (_mod < (-1.0 * _modFactor)) _modulationUp = true;
+    if (_mod > _modFactor) _modulationUp = false;
+
+    return val;
 }
 
-Voice::Voice (int note, float volume, Waveform waveform)
+Voice::Voice (int note, float volume, Waveform waveform, float modFactor, unsigned modFrequency)
 {
     _waveform = waveform;
     _note = note;
@@ -16,6 +35,11 @@ Voice::Voice (int note, float volume, Waveform waveform)
     _isDeleted = false;
     _pendingNoteOff = false;
 
+    _modFactor = modFactor;
+    _modFrequency = modFrequency;
+    _mod = 0.0;
+    _modulationUp = true;
+
     _frequency = MidiNoteToFrequency(note);
     _orgFrequency = _frequency;
 }
@@ -23,7 +47,7 @@ Voice::Voice (int note, float volume, Waveform waveform)
 float Voice::NextSample ()
 {
     float sample = 0.0f;
-    double phaseNorm = _phase / twoPi; // 0..1
+    double phaseNorm = _phase / TWO_PI; // 0..1
 
     switch (_waveform)
     {
@@ -46,7 +70,7 @@ float Voice::NextSample ()
     }
 
     _phase += Increment();
-    if (_phase >= twoPi) _phase -= twoPi;
+    if (_phase >= TWO_PI) _phase -= TWO_PI;
 
     return sample;
 }

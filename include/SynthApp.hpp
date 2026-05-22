@@ -17,6 +17,7 @@ private:
     static RecycleList<Voice> Voices;
 
     int _selectedMidiIn;
+    float _modulationFactor = 0.00f;
     PaStream *_output;
     
     Waveform _currentWaveform;
