@@ -9,34 +9,34 @@
 class Voice
 {
 private:
-    const double TWO_PI = 2.0 * std::numbers::pi;
+    const double TWO_PI= 2.0 * std::numbers::pi;
+
     Waveform _waveform;
     double _mod;
     bool _modulationUp;
-
-    double Increment ();
+    float *_modFactor;
 
 public:
+
     int _note;
-    float _orgFrequency;
     float _frequency;
     double _volume;
     double _phase;
     bool _isDeleted;
     bool _pendingNoteOff;
 
-    float _modFactor;
     unsigned _modFrequency;
 
     Voice (
         int note,
         float volume,
-        Waveform waveform = Waveform::Sin,
-        float modFactor = 0.00f,
+        Waveform waveform,
+        float *modFactor,
         unsigned modFrequency = 5
     );
     float NextSample ();
     float MidiNoteToFrequency (int note);
+    void Increment (float pitch = 1.0f);
 };
 
 #endif

@@ -2,31 +2,41 @@
 #include "Waveform.hpp"
 #include "Voice.hpp"
 
-double Voice::Increment ()
-{
-    if (_modFrequency == 0 || _modFactor < 0.0001) {
-        return TWO_PI * _frequency / SAMPLE_RATE;
-    }
-    
-    double val = TWO_PI * (_frequency * (1.0 + _mod)) / SAMPLE_RATE;
+void Voice::Increment (float pitch)
+{   
+    if (*_modFactor < 0.0f) {
+        if (_modulationUp)
+        {
+            _mod -= 0.5 * _modFrequency / SAMPLE_RATE;
+        }
+        else
+        {
+            _mod += 0.5 * _modFrequency / SAMPLE_RATE;
+        }
 
-    if (_modulationUp)
-    {
-        _mod += 0.5 * _modFrequency / SAMPLE_RATE;
+        if (_mod > (-1.0 * *_modFactor)) _modulationUp = true;
+        if (_mod < *_modFactor) _modulationUp = false;
     }
     else
     {
-        _mod -= 0.5 * _modFrequency / SAMPLE_RATE;
+        if (_modulationUp)
+        {
+            _mod += 0.5 * _modFrequency / SAMPLE_RATE;
+        }
+        else
+        {
+            _mod -= 0.5 * _modFrequency / SAMPLE_RATE;
+        }
+
+        if (_mod < (-1.0 * *_modFactor)) _modulationUp = true;
+        if (_mod > *_modFactor) _modulationUp = false;
     }
 
-
-    if (_mod < (-1.0 * _modFactor)) _modulationUp = true;
-    if (_mod > _modFactor) _modulationUp = false;
-
-    return val;
+    _phase += TWO_PI * (pitch * _frequency * (1.0 + _mod)) / SAMPLE_RATE;
+    if (_phase >= TWO_PI) _phase -= TWO_PI;
 }
 
-Voice::Voice (int note, float volume, Waveform waveform, float modFactor, unsigned modFrequency)
+Voice::Voice (int note, float volume, Waveform waveform, float *modFactor, unsigned modFrequency)
 {
     _waveform = waveform;
     _note = note;
@@ -41,7 +51,6 @@ Voice::Voice (int note, float volume, Waveform waveform, float modFactor, unsign
     _modulationUp = true;
 
     _frequency = MidiNoteToFrequency(note);
-    _orgFrequency = _frequency;
 }
 
 float Voice::NextSample ()
@@ -68,9 +77,6 @@ float Voice::NextSample ()
             sample = std::sinf(_phase) * _volume;
             break;
     }
-
-    _phase += Increment();
-    if (_phase >= TWO_PI) _phase -= TWO_PI;
 
     return sample;
 }

@@ -15,6 +15,7 @@ class SynthApp
 private:
     static const double _fade;
     static RecycleList<Voice> Voices;
+    static float _pitch;
 
     int _selectedMidiIn;
     float _modulationFactor = 0.00f;
@@ -27,6 +28,7 @@ private:
 
     void NoteOn (int noteNumber, int velocity);
     void NoteOff (int noteNumber);
+    void CalcPitch (double rel);
     bool MidiMessageReceived ();
     void JoystickMessageReceived ();
 

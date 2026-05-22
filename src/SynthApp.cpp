@@ -18,10 +18,20 @@
 
 const double SynthApp::_fade = 0.000001;
 RecycleList<Voice> SynthApp::Voices;
+float SynthApp::_pitch = 1.0f;
+
+void SynthApp::CalcPitch (double rel)
+{
+    // semitone offset -4 .. +4
+    double semitones = rel * 4.0;
+
+    // Frequency factor and new frequency
+    _pitch = std::powf(2.0, semitones / 12.0);
+}
 
 void SynthApp::NoteOn (int noteNumber, int velocity)
 {
-    Voices.Add(noteNumber, velocity / 127.0f * 0.4f, _currentWaveform, _modulationFactor);
+    Voices.Add(noteNumber, velocity / 127.0f * 0.4f, _currentWaveform, &_modulationFactor);
     _sustainCount = 0;
 }
 
@@ -45,14 +55,46 @@ void SynthApp::NoteOff (int noteNumber)
 }
 void SynthApp::JoystickMessageReceived ()
 {
-    unsigned char buffer[64];
+    static int val1 = 0;
+    static int val2 = 0;
+    static unsigned char btn = 0;
+    static int calibrate1 = -999;
+    static int calibrate2 = -999;
+    unsigned char buffer[8];
     
     int n = read(_joystickFd, buffer, sizeof(buffer));
 
-    if (n > 2) {
-        int x = buffer[0];
-        int y = buffer[1];
-        std::printf("decoded: X=%d Y=%d\n", x, y);
+    if (n > 3) {
+        int z = buffer[0];
+        int x = buffer[1];
+        int y = buffer[2];
+        //std::printf("decoded: X=%d Y=%d Z=%d\n", x, y, z);
+        if (calibrate1 == -999) {
+            calibrate1 = x;
+            val1 = x;
+        }
+
+        if (calibrate2 == -999) {
+            calibrate2 = z;
+            val2 = z;
+        }
+
+        if (val1 != x) {
+            CalcPitch((float)(val1-calibrate1)/calibrate1);
+            std::printf("pitch: %f\n", _pitch);
+            val1 = x;
+        }
+
+        if (val2 != z) {
+            _modulationFactor = 0.6 * (float)(val2-calibrate2)/calibrate2;
+            std::printf("modulation: %f\n", _modulationFactor);
+            val2 = z;
+        }
+
+        if ((btn & 0x01) == 0 && (buffer[3] & 0x01) == 1) _sustainPedal = !_sustainPedal;
+
+        if ((btn & 0x02) == 0 && (buffer[3] & 0x02) == 2) _currentWaveform++;
+        btn = buffer[3];
     }
 }
 
@@ -114,17 +156,7 @@ bool SynthApp::MidiMessageReceived ()
         {
             // relative -1..+1 (center -> 0)
             double rel = (((velocity << 7) | note) - 8192) / (double)8192.0;
-
-            // semitone offset -4 .. +4
-            double semitones = rel * 4.0;
-
-            // Frequency factor and new frequency
-            float factor = std::powf(2.0, semitones / 12.0);
-
-            for (const auto &v : Voices)
-            {
-                v->_frequency = v->_orgFrequency * factor;
-            }
+            CalcPitch(rel);
         }
     }
     return isNewVoice;
@@ -184,8 +216,8 @@ void SynthApp::Run (bool &keepRunning)
 
     if (_joystickFd != -1) {
         events[1].events = EPOLLIN;
-        events[1].data.fd = _selectedMidiIn;
-        epoll_ctl(epoll_fd, EPOLL_CTL_ADD, _selectedMidiIn, &events[1]);
+        events[1].data.fd = _joystickFd;
+        epoll_ctl(epoll_fd, EPOLL_CTL_ADD, _joystickFd, &events[1]);
     }
 
     Pa_StartStream(_output);
@@ -201,7 +233,6 @@ void SynthApp::Run (bool &keepRunning)
                 JoystickMessageReceived();
             }
         }
-        
     }
     
     Pa_StopStream(_output);
@@ -229,6 +260,7 @@ int SynthApp::Read (
             {
                 v->_volume -= _fade;
                 mixedSample += v->NextSample();
+                v->Increment(_pitch);
             }
         }
 
