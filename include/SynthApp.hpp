@@ -18,6 +18,7 @@ private:
 
     int _selectedMidiIn;
     float _modulationFactor = 0.00f;
+    int _joystickFd;
     PaStream *_output;
     
     Waveform _currentWaveform;
@@ -27,9 +28,10 @@ private:
     void NoteOn (int noteNumber, int velocity);
     void NoteOff (int noteNumber);
     bool MidiMessageReceived ();
+    void JoystickMessageReceived ();
 
 public:
-    SynthApp (char *midiDev, Waveform waveform);
+    SynthApp (char *midiDev, Waveform waveform, char *joyDev = nullptr);
     virtual ~SynthApp ();
     
     void Run (bool &keepRunning);

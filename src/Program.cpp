@@ -12,11 +12,13 @@ void handleSig (int sig) {
 int main (int argc, char * argv[])
 {
     Waveform wf;
+    SynthApp *app;
     
     if (argc < 3) {
-        printf("usage: %s midiDevice waveform\n", argv[0]);
+        printf("usage: %s midiDevice waveform [hidrawJoystick]\n", argv[0]);
         printf(" - midiDevice example: /dev/midi2\n");
         printf(" - waveform: s=sin, a=saw, t=triangle, q=square\n");
+        printf(" - hidrawJoystick example: /dev/hidraw2\n");
         printf(" - CTRL+C to exit\n");
         return 1;
     }
@@ -37,7 +39,11 @@ int main (int argc, char * argv[])
             wf = Waveform::Square;
     }
     
-    auto app = new SynthApp(argv[1], wf);
+    if (argc == 4) {
+        app = new SynthApp(argv[1], wf, argv[3]);
+    } else {
+        app = new SynthApp(argv[1], wf);
+    }
     signal(SIGINT, handleSig);
 
     app->Run(keepRunning);

@@ -1,12 +1,15 @@
 #include <cmath>
 #include <portaudio.h>
 
+#include <cstdio>
+
 /* open */
 #include <fcntl.h>
 /* close */
 #include <unistd.h>
 
 #include <sys/epoll.h>
+#include <linux/hidraw.h>
 
 #include "Waveform.hpp"
 #include "Voice.hpp"
@@ -38,6 +41,18 @@ void SynthApp::NoteOff (int noteNumber)
         {
             v->_isDeleted = true;
         }
+    }
+}
+void SynthApp::JoystickMessageReceived ()
+{
+    unsigned char buffer[64];
+    
+    int n = read(_joystickFd, buffer, sizeof(buffer));
+
+    if (n > 2) {
+        int x = buffer[0];
+        int y = buffer[1];
+        std::printf("decoded: X=%d Y=%d\n", x, y);
     }
 }
 
@@ -115,13 +130,17 @@ bool SynthApp::MidiMessageReceived ()
     return isNewVoice;
 }
 
-SynthApp::SynthApp (char *midiDev, Waveform waveform)
+SynthApp::SynthApp (char *midiDev, Waveform waveform, char *joyDev)
 {
     _sustainCount = 0;
     _sustainPedal = false;
     _currentWaveform = waveform;
     _selectedMidiIn = open(midiDev, O_RDONLY | O_NONBLOCK);
-    
+    _joystickFd = -1;
+    if (joyDev != nullptr) {
+        _joystickFd = open(joyDev, O_RDONLY | O_NONBLOCK);
+    }
+
     Pa_Initialize();
     Pa_OpenDefaultStream(
         &_output,
@@ -144,26 +163,45 @@ SynthApp::~SynthApp ()
     Pa_Terminate();
     
     close(_selectedMidiIn);
+    if (_joystickFd != -1) close(_joystickFd);
 }
 
 void SynthApp::Run (bool &keepRunning)
 {
     int epoll_fd;
     struct epoll_event *events;
+
+    int maxElements = 1;
+    if (_joystickFd != -1) maxElements++;
     
     epoll_fd = epoll_create1(0);
-    // 1 element = index 0
-    events = (struct epoll_event *)calloc(1, sizeof(struct epoll_event));
+    // 1 element = index 0 = midi
+    // 1 element = index 1 = joystick
+    events = (struct epoll_event *)calloc(maxElements, sizeof(struct epoll_event));
     events[0].events = EPOLLIN;
     events[0].data.fd = _selectedMidiIn;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, _selectedMidiIn, &events[0]);
+
+    if (_joystickFd != -1) {
+        events[1].events = EPOLLIN;
+        events[1].data.fd = _selectedMidiIn;
+        epoll_ctl(epoll_fd, EPOLL_CTL_ADD, _selectedMidiIn, &events[1]);
+    }
 
     Pa_StartStream(_output);
 
     while (keepRunning)
     {
-        epoll_wait(epoll_fd, events, 1, 200);
-        MidiMessageReceived();
+        int n = epoll_wait(epoll_fd, events, maxElements, 200);
+        for (int i = 0; i < n; ++i) {
+            if (events[i].data.fd == _selectedMidiIn) {
+                MidiMessageReceived();
+            }
+            if (events[i].data.fd == _joystickFd) {
+                JoystickMessageReceived();
+            }
+        }
+        
     }
     
     Pa_StopStream(_output);
