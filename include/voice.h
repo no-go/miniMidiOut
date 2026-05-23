@@ -3,7 +3,7 @@
 
 #include "noise.h"
 
-#define VOICE_MAX             16
+#define VOICE_MAX             8
 #define VOICE_PITCH           440.0f
 
 /* 2/12 = range of 2 half notes */

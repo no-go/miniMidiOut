@@ -12,7 +12,7 @@ supports velocity, pitch bend and sustain.
 
 ## It is not realy realtime
 
-Messure delay between key press and audio out:
+Messure delay between key press and audio out (tested with v1.5.4):
 
 - Pi1: *64ms*
 - eeepc: *48ms*
