@@ -3,7 +3,7 @@
 
 #include "noise.h"
 
-#define VOICE_MAX             16
+#define VOICE_MAX             8
 #define VOICE_PITCH           440.0f
 
 /* 2/12 = range of 2 half notes */
@@ -16,6 +16,10 @@ typedef struct Voice_s {
   double phase;
   unsigned int envelope;
   int active;
+
+  double mod;
+  int modulationUp;
+
   Noise noise_detail;
 } Voice;
 
@@ -27,5 +31,7 @@ extern volatile float voice_pitchbend;
 Voice *voice_get ();
 Voice *voice_find_by_note (const unsigned char *note);
 float voice_midi2freq (const unsigned char *note);
+
+void voice_increment (Voice * v);
 
 #endif
