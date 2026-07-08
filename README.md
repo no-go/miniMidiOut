@@ -16,6 +16,7 @@ midi
 - hold and release
 - multiple voices
 - modulation (5V..A4..GND)
+  - change in frequency
 
 hardware
 
@@ -29,7 +30,6 @@ hardware
 - 7bit velocity
 - hall button (NO)
 - modulation control
-  - change in amplitude or frequency
   - change its speed (?)
 
 ## bugs

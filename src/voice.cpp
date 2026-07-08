@@ -43,7 +43,8 @@ void voice_init (Voice *v, uint8_t note, uint8_t velocity) {
     v->incr = pitchbend_incr(v->freqX100);
     v->note = note;
     v->phase = 0;
-    v->cutoff = modulation_cutoff();
+    v->modulation = 0;
+    v->mod_up = true;
     v->hold = 4*SAMPLE_RATE;
     v->volume = ((uint32_t)velocity)<<10;
     v->release = VOICE_SUSTAIN_RELEASE;

@@ -22,7 +22,8 @@ typedef struct Voice_s
     uint32_t       volume;
     uint32_t        phase;
     uint32_t         incr;
-    uint32_t       cutoff;
+    int32_t    modulation;
+    bool           mod_up;
 } Voice;
 
 const uint32_t voice_midiFreq[133] PROGMEM = {

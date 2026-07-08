@@ -5,10 +5,6 @@
 
 #define MODULATION_POTI     A4
 
-extern uint16_t modulation_value;
-extern uint16_t modulation_value_old;
-
-uint32_t modulation_cutoff (void);
-void modulation_refresh (void);
+extern volatile int32_t modulation_value;
 
 #endif

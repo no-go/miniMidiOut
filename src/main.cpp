@@ -20,6 +20,14 @@ USB         Usb;
 USBHub      Hub(&Usb);
 USBH_MIDI   Midi(&Usb);
 
+void onInit()
+{
+    char buf[20];
+    uint16_t vid = Midi.idVendor();
+    uint16_t pid = Midi.idProduct();
+    sprintf(buf, "VID:%04X, PID:%04X", vid, pid);
+    Serial.println(buf);
+}
 
 void MIDI_poll ()
 {
@@ -112,7 +120,6 @@ void setup ()
     octave_pitch = 0;
     poti_pitch_old = 0;
     modulation_value = 0;
-    modulation_value_old = 0;
 
     pinMode(PITCH_POTI, INPUT);
     pinMode(MODULATION_POTI, INPUT);
@@ -124,7 +131,14 @@ void setup ()
     setupTimers();
     sei();
 
-    while (Usb.Init() == -1) delay(200);
+    Serial.println("Try to init USB Host Shield.");
+    while (Usb.Init() == -1)
+    {
+        delay(200);
+        Serial.print(".");
+    }
+    Serial.println("success!");
+    Midi.attachOnInit(onInit);
 }
 
 void loop ()
@@ -134,17 +148,13 @@ void loop ()
 
     poti_pitch = analogRead(PITCH_POTI);
     if (poti_pitch > (poti_pitch_old+5) || poti_pitch < (poti_pitch_old-5)) {
-        Serial.println(poti_pitch);
+        //Serial.println(poti_pitch);
         pitchbend = map(poti_pitch, 0, 1023, -8192, 8191);
         pitchbend_refresh();
         poti_pitch_old = poti_pitch;
     }
-    modulation_value = analogRead(MODULATION_POTI);
-    if (modulation_value > (modulation_value_old+2) || modulation_value < (modulation_value_old-2)) {
-        Serial.println(modulation_value);
-        modulation_refresh();
-        modulation_value_old = modulation_value;
-    }
+    modulation_value = analogRead(MODULATION_POTI) - 512;
+    modulation_value <<= 6;
 
     if (pitchbend == 0 || (poti_pitch < 514 && poti_pitch > 508)) {
         digitalWrite(PITCH_LED, HIGH);
@@ -183,13 +193,34 @@ void loop ()
 ISR(TIMER1_COMPA_vect) {
     int8_t i,vol,sum = 0;
     uint8_t port = PORTD;
+    int32_t incr = 0;
     Voice *v;
 
     for (i = 0; i < VOICE_MAX; ++i) {
         v = &voices[i];
-        if (v->state != VOICE_OFF) {
+        if (v->state != VOICE_OFF)
+        {
+            incr = v->incr >> 5;
             v->phase += v->incr;
-            if (v->phase < v->cutoff)
+
+            if (v->mod_up) {
+                if (v->modulation < incr && v->modulation > (-1*incr)) {
+                    v->modulation += modulation_value;
+                } else {
+                    v->modulation -= modulation_value;
+                    v->mod_up = false;
+                }
+            } else {
+                if (v->modulation < incr && v->modulation > (-1*incr)) {
+                    v->modulation -= modulation_value;
+                } else {
+                    v->modulation += modulation_value;
+                    v->mod_up = true;
+                }
+            }
+
+            v->phase += v->modulation;
+            if (v->phase < 0x38000000UL)
             {
                 vol = (v->volume >> 11);
                 sum += (vol < 1)? 1 : vol;
