@@ -120,6 +120,7 @@ void setup ()
     octave_pitch = 0;
     poti_pitch_old = 0;
     modulation_value = 0;
+    modulation_value_new = 0;
 
     pinMode(PITCH_POTI, INPUT);
     pinMode(MODULATION_POTI, INPUT);
@@ -147,14 +148,23 @@ void loop ()
     if ( Midi ) MIDI_poll();
 
     poti_pitch = analogRead(PITCH_POTI);
-    if (poti_pitch > (poti_pitch_old+5) || poti_pitch < (poti_pitch_old-5)) {
+    if (
+        poti_pitch > (poti_pitch_old+PITCH_TOLERANCE) ||
+        poti_pitch < (poti_pitch_old-PITCH_TOLERANCE)
+    ) {
         //Serial.println(poti_pitch);
         pitchbend = map(poti_pitch, 0, 1023, -8192, 8191);
         pitchbend_refresh();
         poti_pitch_old = poti_pitch;
     }
-    modulation_value = analogRead(MODULATION_POTI) - 512;
-    modulation_value <<= 6;
+
+    modulation_value_new = analogRead(MODULATION_POTI) - 512;
+    if (
+        modulation_value_new > (modulation_value+MODULATION_TOLERANCE) ||
+        modulation_value_new < (modulation_value-MODULATION_TOLERANCE)
+    ) {
+        modulation_value = modulation_value_new;
+    }
 
     if (pitchbend == 0 || (poti_pitch < 514 && poti_pitch > 508)) {
         digitalWrite(PITCH_LED, HIGH);
@@ -205,16 +215,16 @@ ISR(TIMER1_COMPA_vect) {
 
             if (v->mod_up) {
                 if (v->modulation < incr && v->modulation > (-1*incr)) {
-                    v->modulation += modulation_value;
+                    v->modulation += modulation_value<<6;
                 } else {
-                    v->modulation -= modulation_value;
+                    v->modulation -= modulation_value<<6;
                     v->mod_up = false;
                 }
             } else {
                 if (v->modulation < incr && v->modulation > (-1*incr)) {
-                    v->modulation -= modulation_value;
+                    v->modulation -= modulation_value<<6;
                 } else {
-                    v->modulation += modulation_value;
+                    v->modulation += modulation_value<<6;
                     v->mod_up = true;
                 }
             }
