@@ -5,6 +5,8 @@
 #include "voice.hpp"
 #include "pitchbend.hpp"
 #include "sustain.hpp"
+#include "modulation.hpp"
+#include "octave.hpp"
 
 // multi voice square mixer with per-voice variable duty, R-2R output (6-bit on PORTD2..7)
 // Adjust DAC_BITS to expand to more pins if you build larger ladder.
@@ -14,30 +16,18 @@
 #define DAC_BITS            6
 uint8_t dac_mask;
 
-#define PITCH_POTI          A0
-#define PITCH_LED           A1
-#define SUSTAIN_BTN         A2
-#define OCTAVE_SW           A3
-
-int16_t poti_pitch;
-int16_t poti_pitch_old;
-int8_t octave_pitch;
-int    sustain_last;
-
-
 USB         Usb;
 USBHub      Hub(&Usb);
 USBH_MIDI   Midi(&Usb);
 
 void onInit()
 {
-  char buf[20];
-  uint16_t vid = Midi.idVendor();
-  uint16_t pid = Midi.idProduct();
-  sprintf(buf, "VID:%04X, PID:%04X", vid, pid);
-  Serial.println(buf);
+    char buf[20];
+    uint16_t vid = Midi.idVendor();
+    uint16_t pid = Midi.idProduct();
+    sprintf(buf, "VID:%04X, PID:%04X", vid, pid);
+    Serial.println(buf);
 }
-
 
 void MIDI_poll ()
 {
@@ -58,15 +48,8 @@ void MIDI_poll ()
             if (status == 0x90 && velocity > 0)
             {
                 Serial.println(note);
-                v = voice_get();
-
-                v->freqX100 = voice_get_freq(note + octave_pitch);
-                v->incr = pitchbend_incr(v->freqX100);
-                v->note = note;
-                v->phase = 0;
-                v->hold = 4*SAMPLE_RATE;
-                v->volume = ((uint32_t)velocity)<<10;
-                v->release = VOICE_SUSTAIN_RELEASE;
+                v = voice_new();
+                voice_init(v, note, velocity);
 
                 noInterrupts();
                 v->state = VOICE_ON;
@@ -136,22 +119,22 @@ void setup ()
     sustain_last = HIGH;
     octave_pitch = 0;
     poti_pitch_old = 0;
+    modulation_value = 0;
+    modulation_value_new = 0;
 
     pinMode(PITCH_POTI, INPUT);
+    pinMode(MODULATION_POTI, INPUT);
     pinMode(PITCH_LED, OUTPUT);
     pinMode(SUSTAIN_BTN, INPUT_PULLUP);
     pinMode(OCTAVE_SW, INPUT_PULLUP);
 
-    for (uint8_t i = 0; i < VOICE_MAX; ++i) {
-        voice_init(&(voices[i]));
-    }
     cli();
     setupTimers();
     sei();
 
-
     Serial.println("Try to init USB Host Shield.");
-    while (Usb.Init() == -1) {
+    while (Usb.Init() == -1)
+    {
         delay(200);
         Serial.print(".");
     }
@@ -165,10 +148,22 @@ void loop ()
     if ( Midi ) MIDI_poll();
 
     poti_pitch = analogRead(PITCH_POTI);
-    if (poti_pitch > (poti_pitch_old+5) || poti_pitch < (poti_pitch_old-5)) {
+    if (
+        poti_pitch > (poti_pitch_old+PITCH_TOLERANCE) ||
+        poti_pitch < (poti_pitch_old-PITCH_TOLERANCE)
+    ) {
+        //Serial.println(poti_pitch);
         pitchbend = map(poti_pitch, 0, 1023, -8192, 8191);
         pitchbend_refresh();
         poti_pitch_old = poti_pitch;
+    }
+
+    modulation_value_new = analogRead(MODULATION_POTI) - 512;
+    if (
+        modulation_value_new > (modulation_value+MODULATION_TOLERANCE) ||
+        modulation_value_new < (modulation_value-MODULATION_TOLERANCE)
+    ) {
+        modulation_value = modulation_value_new;
     }
 
     if (pitchbend == 0 || (poti_pitch < 514 && poti_pitch > 508)) {
@@ -208,13 +203,34 @@ void loop ()
 ISR(TIMER1_COMPA_vect) {
     int8_t i,vol,sum = 0;
     uint8_t port = PORTD;
+    int32_t incr = 0;
     Voice *v;
 
     for (i = 0; i < VOICE_MAX; ++i) {
         v = &voices[i];
-        if (v->state != VOICE_OFF) {
+        if (v->state != VOICE_OFF)
+        {
+            incr = v->incr >> 5;
             v->phase += v->incr;
-            if (v->phase < 0x40000000UL)
+
+            if (v->mod_up) {
+                if (v->modulation < incr && v->modulation > (-1*incr)) {
+                    v->modulation += modulation_value<<6;
+                } else {
+                    v->modulation -= modulation_value<<6;
+                    v->mod_up = false;
+                }
+            } else {
+                if (v->modulation < incr && v->modulation > (-1*incr)) {
+                    v->modulation -= modulation_value<<6;
+                } else {
+                    v->modulation += modulation_value<<6;
+                    v->mod_up = true;
+                }
+            }
+
+            v->phase += v->modulation;
+            if (v->phase < 0x38000000UL)
             {
                 vol = (v->volume >> 11);
                 sum += (vol < 1)? 1 : vol;
