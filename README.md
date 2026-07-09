@@ -15,22 +15,15 @@ midi
 - sustain
 - hold and release
 - multiple voices
-- modulation (5V..A4..GND)
-  - change in frequency
 
 hardware
 
 - octave switch down (A3 to GND)
 - additional sustain (A2 to GND)
 - additional pitchbend (5V..A0..GND)
+- modulation (5V..A4..GND)
 - A1 is HIGH, if pitchbend is neutral
-
-## new ideas
-
-- 7bit velocity
-- hall button (NO)
-- modulation control
-  - change its speed (?)
+- A5 is HIGH, if modulation is neutral
 
 ## bugs
 

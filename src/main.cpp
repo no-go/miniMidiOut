@@ -119,18 +119,23 @@ void setup ()
     sustain_last = HIGH;
     octave_pitch = 0;
     poti_pitch_old = 0;
-    modulation_value = 0;
-    modulation_value_new = 0;
-
+    
     pinMode(PITCH_POTI, INPUT);
     pinMode(MODULATION_POTI, INPUT);
     pinMode(PITCH_LED, OUTPUT);
+    pinMode(MODULATION_LED, OUTPUT);
     pinMode(SUSTAIN_BTN, INPUT_PULLUP);
     pinMode(OCTAVE_SW, INPUT_PULLUP);
+
+    modulation_value_new = analogRead(MODULATION_POTI) - 512;
+    modulation_value = modulation_value_new;
 
     cli();
     setupTimers();
     sei();
+    digitalWrite(PITCH_LED, HIGH);
+    digitalWrite(MODULATION_LED, HIGH);
+    delay(500);
 
     Serial.println("Try to init USB Host Shield.");
     while (Usb.Init() == -1)
@@ -160,10 +165,21 @@ void loop ()
 
     modulation_value_new = analogRead(MODULATION_POTI) - 512;
     if (
+        modulation_value_new > -MODULATION_TOLERANCE &&
+        modulation_value_new < MODULATION_TOLERANCE
+    ) {
+        modulation_value = 0;
+    } else if (
         modulation_value_new > (modulation_value+MODULATION_TOLERANCE) ||
         modulation_value_new < (modulation_value-MODULATION_TOLERANCE)
     ) {
         modulation_value = modulation_value_new;
+    }
+
+    if (modulation_value == 0) {
+        digitalWrite(MODULATION_LED, HIGH);
+    } else {
+        digitalWrite(MODULATION_LED, LOW);
     }
 
     if (pitchbend == 0 || (poti_pitch < 514 && poti_pitch > 508)) {
