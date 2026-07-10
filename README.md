@@ -93,3 +93,10 @@ Hotplug does not work.
 ## Details
 
 See [this file](misc/DETAILS.md) for more details to build and use `miniMidiOut`.
+
+# Real 8Bit Sound
+
+Check [this branch](https://github.com/alltagshack/miniMidiOut/tree/arduino-uno), if you
+want to skip Linux and 32/64bit or [the C# Windows Version](https://github.com/alltagshack/miniMidiOut/tree/c_sharp_massive-ui) and
+just want to plug your USB-Midi keyboard to an 8 bit Micro controller.
+But it is rectangle only!
