@@ -6,6 +6,10 @@ based on D2 (till D7). No final RC needed for good retro sound!
 Do you want to upload it normal and not via usbasp? You have
 to comment out the "upload_" parts in `platformio.ini`.
 
+![Hardware Setup](extra/picture.jpg)
+
+[Listen to the Audio File](https://raw.githubusercontent.com/no-go/miniMidiOut/refs/heads/arduino-uno/extra/example.m4a)
+
 ## Features
 
 midi
@@ -25,7 +29,7 @@ hardware
 - A1 is HIGH, if pitchbend is neutral
 - A5 is HIGH, if modulation is neutral
 
-## bugs
+## Known Bugs
 
 - very 5V sensitive: sometimes MAX USB chip needs minutes or do not match to find device
-- inital find USB-Client takes up to 3 minutes
+- inital find USB-Client takes up to 5 minutes (use reset pin after 5min or reconnect USB)
