@@ -33,3 +33,8 @@ hardware
 
 - very 5V sensitive: sometimes MAX USB chip needs minutes or do not match to find device
 - inital find USB-Client takes up to 5 minutes (use reset pin after 5min or reconnect USB)
+
+Instead of using 5V from Arduino to power up the Shield USB port (VBUS) the MAX VBUS
+Pin should be use. The initial inrush of a big MIDI Device (high inital current) should
+be catched by a 470uF Elko and a skotty diode (1N5819, DO-42, SS14, SS14A SB140, 1N5817, 1N5818).
+Diode should be between MAX Chip and +5V Vbus.

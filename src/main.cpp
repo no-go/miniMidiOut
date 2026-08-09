@@ -138,11 +138,18 @@ void setup ()
     delay(500);
 
     Serial.println("Try to init USB Host Shield.");
-    while (Usb.Init() == -1)
-    {
-        delay(200);
-        Serial.print(".");
+    if (Usb.Init() == -1) {
+        Serial.println("USB Init failed!");
+        while (1) {
+            digitalWrite(PITCH_LED, HIGH);
+            delay(100);
+            digitalWrite(PITCH_LED, LOW);
+            delay(100);
+        }
     }
+    Usb.vbusPower(vbus_on);
+    delay(200);
+    Usb.regWr(0x04, 0x08);
     Serial.println("success!");
     Midi.attachOnInit(onInit);
 }
