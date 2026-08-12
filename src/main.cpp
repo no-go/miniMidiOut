@@ -15,17 +15,7 @@
 #define DAC_PIN_BASE        2
 #define DAC_BITS            6
 uint8_t dac_mask;
-
-// double buffer: ISR plays one buffer, main loop renders the other.
-// AUDIO_BUF_LEN samples per block -> 8kHz / 32 = 4ms per block.
-#define AUDIO_BUF_LEN       32
-
-volatile uint8_t audio_buf[2][AUDIO_BUF_LEN];
-volatile uint8_t buf_playing = 0;
-volatile uint16_t buf_rdpos = 0;
-volatile uint8_t buf_full[2] = {0, 0};
-
-void render_block (uint8_t *buf);
+uint32_t poti_last_read = 0;
 
 USB         Usb;
 USBHub      Hub(&Usb);
@@ -38,6 +28,12 @@ void onInit()
     uint16_t pid = Midi.idProduct();
     sprintf(buf, "VID:%04X, PID:%04X", vid, pid);
     Serial.println(buf);
+    for (int i = 0; i < 10; ++i) {
+        digitalWrite(PITCH_LED, HIGH);
+        delay(50);
+        digitalWrite(PITCH_LED, LOW);
+        delay(50);
+    }
 }
 
 void MIDI_poll ()
@@ -49,16 +45,16 @@ void MIDI_poll ()
     uint8_t velocity;
     Voice *v;
 
-    if (Midi.RecvData(&rcvd, bufMidi) == 0 ) {
-        if (rcvd == 4) {
-            status = bufMidi[1];
-            note = bufMidi[2];
-            velocity = bufMidi[3];
+    if (Midi.RecvData(&rcvd, bufMidi) != 0 || rcvd == 0) return;
 
-            /* NOTE ON */
-            if (status == 0x90 && velocity > 0)
-            {
-                Serial.println(note);
+    for (uint16_t i = 0; i + 3 < rcvd; i += 4) {
+        status = bufMidi[i+1];
+        note = bufMidi[i+2];
+        velocity = bufMidi[i+3];
+
+        /* NOTE ON */
+        if (status == 0x90 && velocity > 0)
+        {
                 v = voice_new();
                 voice_init(v, note, velocity);
 
@@ -95,7 +91,6 @@ void MIDI_poll ()
                 pitchbend = ((velocity << 7) | note) - 8192;
                 pitchbend_refresh();
             }
-        }
     }
 }
 
@@ -152,9 +147,9 @@ void setup ()
     if (Usb.Init() == -1) {
         Serial.println("USB Init failed!");
         while (1) {
-            digitalWrite(PITCH_LED, HIGH);
+            digitalWrite(MODULATION_LED, HIGH);
             delay(100);
-            digitalWrite(PITCH_LED, LOW);
+            digitalWrite(MODULATION_LED, LOW);
             delay(100);
         }
     }
@@ -167,43 +162,34 @@ void setup ()
 
 void loop ()
 {
-    uint8_t b = 1 - buf_playing;
-
-    /* wait until the target buffer is free, polling USB while waiting */
-    while (buf_full[b]) {
-        Usb.Task();
-        if ( Midi ) MIDI_poll();
-        b = 1 - buf_playing;
-    }
-
-    render_block((uint8_t*)audio_buf[b]);
-    buf_full[b] = 1;
-
     Usb.Task();
     if ( Midi ) MIDI_poll();
 
-    poti_pitch = analogRead(PITCH_POTI);
-    if (
-        poti_pitch > (poti_pitch_old+PITCH_TOLERANCE) ||
-        poti_pitch < (poti_pitch_old-PITCH_TOLERANCE)
-    ) {
-        //Serial.println(poti_pitch);
-        pitchbend = map(poti_pitch, 0, 1023, -8192, 8191);
-        pitchbend_refresh();
-        poti_pitch_old = poti_pitch;
-    }
+    if (millis() - poti_last_read >= 20) {
+        poti_last_read = millis();
 
-    modulation_value_new = analogRead(MODULATION_POTI) - 512;
-    if (
-        modulation_value_new > -MODULATION_TOLERANCE &&
-        modulation_value_new < MODULATION_TOLERANCE
-    ) {
-        modulation_value = 0;
-    } else if (
-        modulation_value_new > (modulation_value+MODULATION_TOLERANCE) ||
-        modulation_value_new < (modulation_value-MODULATION_TOLERANCE)
-    ) {
-        modulation_value = modulation_value_new;
+        poti_pitch = analogRead(PITCH_POTI);
+        if (
+            poti_pitch > (poti_pitch_old+PITCH_TOLERANCE) ||
+            poti_pitch < (poti_pitch_old-PITCH_TOLERANCE)
+        ) {
+            pitchbend = map(poti_pitch, 0, 1023, -8192, 8191);
+            pitchbend_refresh();
+            poti_pitch_old = poti_pitch;
+        }
+
+        modulation_value_new = analogRead(MODULATION_POTI) - 512;
+        if (
+            modulation_value_new > -MODULATION_TOLERANCE &&
+            modulation_value_new < MODULATION_TOLERANCE
+        ) {
+            modulation_value = 0;
+        } else if (
+            modulation_value_new > (modulation_value+MODULATION_TOLERANCE) ||
+            modulation_value_new < (modulation_value-MODULATION_TOLERANCE)
+        ) {
+            modulation_value = modulation_value_new;
+        }
     }
 
     if (modulation_value == 0) {
@@ -246,74 +232,67 @@ void loop ()
 }
 
 
-void render_block (uint8_t *buf)
-{
-    int8_t i,vol,sum;
-    int32_t incr;
+ISR(TIMER1_COMPA_vect) {
+    int8_t i,vol,sum = 0;
+    uint8_t port = PORTD;
+    int32_t incr = 0;
     uint32_t mod = modulation_value;
+    uint32_t mod6 = mod << 6;
+    static uint8_t ctrl_phase = 0;
     Voice *v;
 
-    for (uint16_t n = 0; n < AUDIO_BUF_LEN; ++n) {
-        sum = 0;
-        for (i = 0; i < VOICE_MAX; ++i) {
-            v = &voices[i];
-            if (v->state != VOICE_OFF)
-            {
-                incr = v->incr >> 5;
-                v->phase += v->incr;
+    sample_counter++;
+    ctrl_phase++;
 
+    for (i = 0; i < VOICE_MAX; ++i) {
+        v = &voices[i];
+        if (v->state != VOICE_OFF)
+        {
+            incr = v->incr >> 5;
+            v->phase += v->incr;
+
+            if (mod6 && (ctrl_phase & 0x0F) == 0) {
                 if (v->mod_up) {
                     if (v->modulation < incr && v->modulation > (-1*incr)) {
-                        v->modulation += mod<<6;
+                        v->modulation += mod6 << 4;
                     } else {
-                        v->modulation -= mod<<6;
+                        v->modulation -= mod6 << 4;
                         v->mod_up = false;
                     }
                 } else {
                     if (v->modulation < incr && v->modulation > (-1*incr)) {
-                        v->modulation -= mod<<6;
+                        v->modulation -= mod6 << 4;
                     } else {
-                        v->modulation += mod<<6;
+                        v->modulation += mod6 << 4;
                         v->mod_up = true;
                     }
                 }
+            }
 
-                v->phase += v->modulation;
-                if (v->phase < 0x38000000UL)
+            v->phase += v->modulation;
+            if (v->phase < 0x38000000UL)
+            {
+                vol = (v->volume >> 11);
+                sum += (vol < 1)? 1 : vol;
+            }
+            if (v->state == VOICE_RELEASE) {
+                if (v->volume > v->release)
                 {
-                    vol = (v->volume >> 11);
-                    sum += (vol < 1)? 1 : vol;
-                }
-                if (v->state == VOICE_RELEASE) {
-                    if (v->volume > v->release)
-                    {
-                        v->volume -= v->release;
-                    } else {
-                        v->state = VOICE_OFF;
-                        voice_active_value--;
-                    }
+                    v->volume -= v->release;
                 } else {
-                    if (v->hold == 0) {
-                        v->state = VOICE_RELEASE;
-                    } else if (v->hold > 0) {
-                        v->hold--;
-                    }
+                    v->state = VOICE_OFF;
+                    voice_active_value--;
+                }
+            } else {
+                if (v->hold == 0) {
+                    v->state = VOICE_RELEASE;
+                } else if (v->hold > 0) {
+                    v->hold--;
                 }
             }
         }
-        buf[n] = (uint8_t)((sum << DAC_PIN_BASE) & dac_mask);
     }
-    sample_counter += AUDIO_BUF_LEN;
-}
-
-ISR(TIMER1_COMPA_vect) {
-    uint8_t sample = audio_buf[buf_playing][buf_rdpos];
-    PORTD = (PORTD & ~dac_mask) | sample;
-    if (++buf_rdpos >= AUDIO_BUF_LEN) {
-        buf_rdpos = 0;
-        buf_full[buf_playing] = 0;
-        if (buf_full[buf_playing ^ 1]) {
-            buf_playing ^= 1;
-        }
-    }
+    port &= ~dac_mask;
+    port |= ( (sum << DAC_PIN_BASE) & dac_mask );
+    PORTD = port;
 }

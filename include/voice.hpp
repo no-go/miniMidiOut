@@ -3,11 +3,11 @@
 
 #include <stdint.h>
 
-#define VOICE_FAST_RELEASE         90u
+#define VOICE_FAST_RELEASE         60u
 #define VOICE_SUSTAIN_RELEASE       1u
 
-#define VOICE_MAX                   8
-#define SAMPLE_RATE              8000u
+#define VOICE_MAX                   6
+#define SAMPLE_RATE              6000u
 
 enum VoiceState {VOICE_OFF, VOICE_ON, VOICE_RELEASE};
 
