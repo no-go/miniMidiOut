@@ -276,7 +276,8 @@ ISR(TIMER1_COMPA_vect) {
                 sum += (vol < 1)? 1 : vol;
             }
             if (v->state == VOICE_RELEASE) {
-                uint32_t dec = ((uint32_t)v->release * v->release_scale) >> 8;
+                uint32_t dec = (v->release == VOICE_FAST_RELEASE)
+                             ? v->dec_fast : v->dec_sustain;
                 if (v->volume > dec)
                 {
                     v->volume -= dec;

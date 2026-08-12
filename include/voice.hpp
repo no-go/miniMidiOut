@@ -9,8 +9,9 @@
 // release is frequency compensated: the audible decay granularity depends on the
 // (frequency dependent) PWM block width, so low notes get a faster release.
 // notes >= RELEASE_REF (C5) keep the raw release rate, lower notes decay faster.
-#define RELEASE_REF_INCR    374542350uL  // incr of C5
-#define RELEASE_MAX_SCALE           8u   // cap for the speed up factor
+#define RELEASE_REF_INCR         374542350uL  // incr of C5
+#define RELEASE_MAX_SCALE                8u   // cap for the fast release factor
+#define RELEASE_MAX_SCALE_SUSTAIN        2u   // gentler cap: sustain rings 3-4x longer
 
 #define VOICE_MAX                   6
 #define SAMPLE_RATE              6000u
@@ -21,10 +22,11 @@ typedef struct Voice_s
 {
     VoiceState       state;
     uint8_t           note;
-    uint8_t        release;
-    uint32_t  release_scale; ///< Q8 scaling for per-sample release decrement
+uint8_t       release;
+    uint32_t    dec_fast;    ///< volume decrement per sample (fast release)
+    uint32_t  dec_sustain;   ///< volume decrement per sample (sustain release)
     /// if the value is not -1, how many samples this voice has to play the note
-    int32_t           hold;
+    int32_t          hold;
     uint32_t      freqX100;
     uint32_t        volume;
     uint32_t         phase;

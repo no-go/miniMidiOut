@@ -52,7 +52,11 @@ void voice_release_refresh (Voice *v) {
     else s = (uint32_t)(((uint64_t)RELEASE_REF_INCR << 8) / v->incr);
     if (s < (1u<<8)) s = 1u<<8;
     if (s > (RELEASE_MAX_SCALE<<8)) s = RELEASE_MAX_SCALE<<8;
-    v->release_scale = s;
+    v->dec_fast = (VOICE_FAST_RELEASE * s) >> 8;
+
+    // sustain keeps a gentler frequency cut, so it rings ~3-4x longer
+    if (s > (RELEASE_MAX_SCALE_SUSTAIN<<8)) s = RELEASE_MAX_SCALE_SUSTAIN<<8;
+    v->dec_sustain = (VOICE_SUSTAIN_RELEASE * s) >> 8;
 }
 
 void voice_init (Voice *v, uint8_t note, uint8_t velocity) {
