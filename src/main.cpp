@@ -16,6 +16,17 @@
 #define DAC_BITS            6
 uint8_t dac_mask;
 
+// double buffer: ISR plays one buffer, main loop renders the other.
+// AUDIO_BUF_LEN samples per block -> 8kHz / 32 = 4ms per block.
+#define AUDIO_BUF_LEN       32
+
+volatile uint8_t audio_buf[2][AUDIO_BUF_LEN];
+volatile uint8_t buf_playing = 0;
+volatile uint16_t buf_rdpos = 0;
+volatile uint8_t buf_full[2] = {0, 0};
+
+void render_block (uint8_t *buf);
+
 USB         Usb;
 USBHub      Hub(&Usb);
 USBH_MIDI   Midi(&Usb);
@@ -156,6 +167,18 @@ void setup ()
 
 void loop ()
 {
+    uint8_t b = 1 - buf_playing;
+
+    /* wait until the target buffer is free, polling USB while waiting */
+    while (buf_full[b]) {
+        Usb.Task();
+        if ( Midi ) MIDI_poll();
+        b = 1 - buf_playing;
+    }
+
+    render_block((uint8_t*)audio_buf[b]);
+    buf_full[b] = 1;
+
     Usb.Task();
     if ( Midi ) MIDI_poll();
 
@@ -223,61 +246,74 @@ void loop ()
 }
 
 
-ISR(TIMER1_COMPA_vect) {
-    int8_t i,vol,sum = 0;
-    uint8_t port = PORTD;
-    int32_t incr = 0;
+void render_block (uint8_t *buf)
+{
+    int8_t i,vol,sum;
+    int32_t incr;
+    uint32_t mod = modulation_value;
     Voice *v;
 
-    for (i = 0; i < VOICE_MAX; ++i) {
-        v = &voices[i];
-        if (v->state != VOICE_OFF)
-        {
-            incr = v->incr >> 5;
-            v->phase += v->incr;
-
-            if (v->mod_up) {
-                if (v->modulation < incr && v->modulation > (-1*incr)) {
-                    v->modulation += modulation_value<<6;
-                } else {
-                    v->modulation -= modulation_value<<6;
-                    v->mod_up = false;
-                }
-            } else {
-                if (v->modulation < incr && v->modulation > (-1*incr)) {
-                    v->modulation -= modulation_value<<6;
-                } else {
-                    v->modulation += modulation_value<<6;
-                    v->mod_up = true;
-                }
-            }
-
-            v->phase += v->modulation;
-            if (v->phase < 0x38000000UL)
+    for (uint16_t n = 0; n < AUDIO_BUF_LEN; ++n) {
+        sum = 0;
+        for (i = 0; i < VOICE_MAX; ++i) {
+            v = &voices[i];
+            if (v->state != VOICE_OFF)
             {
-                vol = (v->volume >> 11);
-                sum += (vol < 1)? 1 : vol;
-            }
-            if (v->state == VOICE_RELEASE) {
-                
-                if (v->volume > v->release)
-                {
-                    v->volume -= v->release;
-                } else {
-                    v->state = VOICE_OFF;
-                    voice_active_value--;
-                }
-            } else {
-                if (v->hold == 0) {
-                    v->state = VOICE_RELEASE;
-                } else if (v->hold > 0) {
-                    v->hold--;
-                }
-            }
+                incr = v->incr >> 5;
+                v->phase += v->incr;
 
+                if (v->mod_up) {
+                    if (v->modulation < incr && v->modulation > (-1*incr)) {
+                        v->modulation += mod<<6;
+                    } else {
+                        v->modulation -= mod<<6;
+                        v->mod_up = false;
+                    }
+                } else {
+                    if (v->modulation < incr && v->modulation > (-1*incr)) {
+                        v->modulation -= mod<<6;
+                    } else {
+                        v->modulation += mod<<6;
+                        v->mod_up = true;
+                    }
+                }
+
+                v->phase += v->modulation;
+                if (v->phase < 0x38000000UL)
+                {
+                    vol = (v->volume >> 11);
+                    sum += (vol < 1)? 1 : vol;
+                }
+                if (v->state == VOICE_RELEASE) {
+                    if (v->volume > v->release)
+                    {
+                        v->volume -= v->release;
+                    } else {
+                        v->state = VOICE_OFF;
+                        voice_active_value--;
+                    }
+                } else {
+                    if (v->hold == 0) {
+                        v->state = VOICE_RELEASE;
+                    } else if (v->hold > 0) {
+                        v->hold--;
+                    }
+                }
+            }
+        }
+        buf[n] = (uint8_t)((sum << DAC_PIN_BASE) & dac_mask);
+    }
+    sample_counter += AUDIO_BUF_LEN;
+}
+
+ISR(TIMER1_COMPA_vect) {
+    uint8_t sample = audio_buf[buf_playing][buf_rdpos];
+    PORTD = (PORTD & ~dac_mask) | sample;
+    if (++buf_rdpos >= AUDIO_BUF_LEN) {
+        buf_rdpos = 0;
+        buf_full[buf_playing] = 0;
+        if (buf_full[buf_playing ^ 1]) {
+            buf_playing ^= 1;
         }
     }
-    port &= ~dac_mask;
-    port |= ( (sum << DAC_PIN_BASE) & dac_mask );
-    PORTD = port;
 }

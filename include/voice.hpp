@@ -24,6 +24,7 @@ typedef struct Voice_s
     uint32_t         incr;
     int32_t    modulation;
     bool           mod_up;
+    uint32_t    started_at;
 } Voice;
 
 const uint32_t voice_midiFreq[133] PROGMEM = {
@@ -73,5 +74,6 @@ uint32_t voice_get_freq (uint8_t note);
 
 extern Voice voices[VOICE_MAX];
 extern volatile int voice_active_value;
+extern volatile uint32_t sample_counter;
 
 #endif

@@ -8,21 +8,29 @@
 
 Voice voices[VOICE_MAX];
 volatile int voice_active_value;
+volatile uint32_t sample_counter = 0;
 
 Voice *voice_new () {
-    Voice *v = &voices[0];
-    bool isFound = false;
-    for (uint8_t i = 0; i < VOICE_MAX; i++) {
-        if (voices[i].state == VOICE_OFF) {
-            v = &voices[i];
-            isFound = true;
+    int8_t isFound = -1;
+    uint8_t oldest_idx = 0;
+    uint32_t oldest_time = voices[oldest_idx].started_at;
+    Voice *v;
+    for (uint8_t i = 0; i < VOICE_MAX; ++i) {
+        v = &voices[i];
+        if (v->state == VOICE_OFF) {
+            isFound = i;
         } else {
-            voices[i].volume = ((float)voices[i].volume) * 0.85f;
+            v->volume = ((float)v->volume) * 0.85f;
+            if (v->started_at < oldest_time) {
+                oldest_time = v->started_at;
+                oldest_idx = i;
+            }
         }
     }
-    /* no non active voice found. we use the 0 voice! */
-    if (isFound) voice_active_value--;
-    return v;
+    if (isFound != -1) return &voices[isFound];
+    // reuse oldest active voice and make ++ invalid
+    voice_active_value--;
+    return &voices[oldest_idx];
 }
 
 void voice_off (const uint8_t note) {
@@ -48,6 +56,7 @@ void voice_init (Voice *v, uint8_t note, uint8_t velocity) {
     v->hold = 4*SAMPLE_RATE;
     v->volume = ((uint32_t)velocity)<<10;
     v->release = VOICE_SUSTAIN_RELEASE;
+    v->started_at = sample_counter;
 }
 
 uint32_t voice_get_freq (uint8_t note) {
