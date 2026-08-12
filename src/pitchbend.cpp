@@ -36,6 +36,7 @@ void pitchbend_refresh (void)
     for (uint8_t i = 0; i < VOICE_MAX; ++i) {
         if (voices[i].state != VOICE_OFF) {
             voices[i].incr = pitchbend_incr(voices[i].freqX100);
+            voice_release_refresh(&voices[i]);
         }
     }
 }

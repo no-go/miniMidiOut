@@ -3,8 +3,14 @@
 
 #include <stdint.h>
 
-#define VOICE_FAST_RELEASE         60u
+#define VOICE_FAST_RELEASE         90u
 #define VOICE_SUSTAIN_RELEASE       1u
+
+// release is frequency compensated: the audible decay granularity depends on the
+// (frequency dependent) PWM block width, so low notes get a faster release.
+// notes >= RELEASE_REF (C5) keep the raw release rate, lower notes decay faster.
+#define RELEASE_REF_INCR    374542350uL  // incr of C5
+#define RELEASE_MAX_SCALE           8u   // cap for the speed up factor
 
 #define VOICE_MAX                   6
 #define SAMPLE_RATE              6000u
@@ -13,17 +19,18 @@ enum VoiceState {VOICE_OFF, VOICE_ON, VOICE_RELEASE};
 
 typedef struct Voice_s
 {
-    VoiceState      state;
-    uint8_t          note;
-    uint8_t       release;
+    VoiceState       state;
+    uint8_t           note;
+    uint8_t        release;
+    uint32_t  release_scale; ///< Q8 scaling for per-sample release decrement
     /// if the value is not -1, how many samples this voice has to play the note
-    int32_t          hold;
-    uint32_t     freqX100;
-    uint32_t       volume;
-    uint32_t        phase;
-    uint32_t         incr;
-    int32_t    modulation;
-    bool           mod_up;
+    int32_t           hold;
+    uint32_t      freqX100;
+    uint32_t        volume;
+    uint32_t         phase;
+    uint32_t          incr;
+    int32_t     modulation;
+    bool            mod_up;
     uint32_t    started_at;
 } Voice;
 
@@ -69,6 +76,7 @@ const uint32_t voice_midiFreq[133] PROGMEM = {
 void voice_init (Voice *v, uint8_t note, uint8_t velocity);
 Voice *voice_new ();
 void voice_off (const uint8_t note);
+void voice_release_refresh (Voice *v);
 void voice_volume_refresh (Voice *v);
 uint32_t voice_get_freq (uint8_t note);
 

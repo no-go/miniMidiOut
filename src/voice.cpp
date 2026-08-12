@@ -45,10 +45,21 @@ void voice_off (const uint8_t note) {
     }
 }
 
+void voice_release_refresh (Voice *v) {
+    // Q8 scaling: low notes (small incr) release faster, notes >= C5 keep rate
+    uint32_t s;
+    if (v->incr == 0) s = 1u<<8;
+    else s = (uint32_t)(((uint64_t)RELEASE_REF_INCR << 8) / v->incr);
+    if (s < (1u<<8)) s = 1u<<8;
+    if (s > (RELEASE_MAX_SCALE<<8)) s = RELEASE_MAX_SCALE<<8;
+    v->release_scale = s;
+}
+
 void voice_init (Voice *v, uint8_t note, uint8_t velocity) {
     v->state = VOICE_OFF;
     v->freqX100 = voice_get_freq(note + octave_pitch);
     v->incr = pitchbend_incr(v->freqX100);
+    voice_release_refresh(v);
     v->note = note;
     v->phase = 0;
     v->modulation = 0;
